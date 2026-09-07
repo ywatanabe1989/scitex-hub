@@ -93,17 +93,68 @@ def test_legacy_todo_path_redirects_to_cards():
 
 
 @pytest.mark.skipif(not _TODO_INSTALLED, reason="scitex-todo not installed")
-def test_todo_lane_globs_disabled_for_tenancy():
+def test_lane_globs_disabled_for_tenancy_under_the_name_the_package_READS():
+    """The opt-out must be set under the env name the CONSUMER reads.
+
+    This asserted ``SCITEX_TODO_LANE_GLOBS`` — the pre-rename name — and
+    passed for it while the guard did nothing, because scitex_cards reads
+    ``SCITEX_CARDS_LANE_GLOBS`` and nothing anywhere reads the old one.
+    A test naming the variable independently of its consumer can only ever
+    prove that SOMETHING was exported; it cannot prove the export lands
+    where the code looks. So the name is imported from the package.
+
+    Why it matters (the original comment, still true): the union would leak
+    host lanes to every hub user. `_discover_lanes` falls back to
+    ``DEFAULT_LANE_GLOBS`` (``~/proj/*/.scitex/cards/tasks.yaml``) when the
+    variable is UNSET, and an explicitly-empty value is the documented
+    opt-out — so "unset" and "set to empty" are opposite behaviours here,
+    and hub was effectively in the first.
+    """
+    # Arrange — the consumer's own constant, never a literal.
+    import os
+
+    from scitex_cards._django.services import ENV_LANE_GLOBS
+
+    # Act
+    value = os.environ.get(ENV_LANE_GLOBS)
+
+    # Assert
+    assert value == "", (
+        f"{ENV_LANE_GLOBS} is {value!r}; it must be the empty string. Unset "
+        "means _discover_lanes falls back to DEFAULT_LANE_GLOBS and unions "
+        "every per-project lane on the host into the board."
+    )
+
+
+@pytest.mark.skipif(not _TODO_INSTALLED, reason="scitex-todo not installed")
+def test_the_retired_lane_globs_name_is_not_what_we_rely_on():
+    """Negative control: the old name must not be the ONLY thing exported.
+
+    Without this, restoring the bug (setting only the retired name) would
+    leave the suite green as soon as someone re-pins the test above to a
+    literal. Pairing them means the suite fails if the export ever drifts
+    back off the consumer's name.
+    """
     # Arrange
     import os
 
-    # Act — settings_shared.py must have opted the board out of host-side
-    # per-project lane discovery (the union would leak host lanes to
-    # every hub user).
-    value = os.environ.get("SCITEX_TODO_LANE_GLOBS")
+    from scitex_cards._django.services import ENV_LANE_GLOBS
 
-    # Assert
-    assert value == ""
+    # CAPTURE FIRST, then assert on the local. Asserting directly on
+    # `os.environ.get(...)` makes pytest expand os.environ in the failure
+    # report — the whole environment, tokens included, into the CI log.
+    # Observed while writing this test: the first run printed GH_TOKEN and
+    # SAC_LISTEN_BEARER before a hook redacted them.
+    value = os.environ.get(ENV_LANE_GLOBS)
+
+    # Assert — whatever the retired name holds, the canonical one decides.
+    assert ENV_LANE_GLOBS != "SCITEX_TODO_LANE_GLOBS", (
+        "upstream now reads the retired name; this guard is obsolete"
+    )
+    assert value == "", (
+        f"the opt-out is not set under {ENV_LANE_GLOBS}, the name the package "
+        f"reads (got {value!r})"
+    )
 
 
 @pytest.mark.skipif(_TODO_INSTALLED, reason="scitex-todo is installed")
