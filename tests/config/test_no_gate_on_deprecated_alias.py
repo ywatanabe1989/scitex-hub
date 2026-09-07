@@ -52,8 +52,20 @@ CANONICAL = "scitex_cards"
 _SEARCH_ROOTS = ("apps", "config", "tests", "scripts")
 
 #: Env vars and app labels keep the historical spelling and are NOT the
-#: package. SCITEX_TODO_LANE_GLOBS is upstream's own documented env name;
-#: todo_app is hub's local Django app, unrelated to the upstream distribution.
+#: package. todo_app is hub's local Django app, unrelated to the upstream
+#: distribution.
+#:
+#: CORRECTED 2026-09-07: this said "SCITEX_TODO_LANE_GLOBS is upstream's own
+#: documented env name". It is NOT, and had not been since the rename —
+#: scitex_cards reads SCITEX_CARDS_LANE_GLOBS and nothing anywhere reads the
+#: SCITEX_TODO_ one. hub was exporting the retired name, so its tenancy
+#: opt-out did nothing (fixed in config/settings/_optional_apps.py).
+#:
+#: The SCITEX_TODO_ entry stays, but as plain defence rather than as a claim
+#: about upstream: this scan greps the LOWERCASE package name case-sensitively,
+#: so an uppercase env var never made a file a candidate here and this sweep
+#: was never the gate that would have caught that drift. Do not read its
+#: presence as evidence the prefix is still live upstream.
 _NOT_THE_PACKAGE = ("SCITEX_TODO_", "todo_app", "scitex_todo_app")
 
 

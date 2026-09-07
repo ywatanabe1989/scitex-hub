@@ -77,6 +77,41 @@ def cards_appconfig_path(apps_module: ModuleType) -> str:
     )
 
 
+def cards_lane_globs_env() -> str:
+    """Return the env var name scitex-cards reads for per-project lane discovery.
+
+    :raises RuntimeError: when that name cannot be imported from the installed
+        package.
+
+    IMPORTED, NEVER SPELLED HERE. The hub does not get to choose this name —
+    the same rule :data:`CARDS_STORE_UPSTREAM_ENV` states — and spelling it as
+    a literal is precisely what broke: the call site set
+    ``SCITEX_TODO_LANE_GLOBS``, the pre-rename spelling, for the whole life of
+    the guard, while scitex_cards read ``SCITEX_CARDS_LANE_GLOBS`` and nothing
+    anywhere read the old one. A wrong literal here disables a tenancy control
+    and changes nothing observable, so there is no symptom to notice.
+
+    Deliberately NOT an ``ImportError``, for the reason
+    :func:`cards_appconfig_path` documents: :func:`optional_upstream_apps`
+    treats that type as "this app is not installed, skip it", so an ImportError
+    raised here would be SWALLOWED and the opt-out would vanish silently —
+    exactly the failure this function exists to prevent.
+    """
+    try:
+        from scitex_cards._django.services import ENV_LANE_GLOBS
+    except ImportError as exc:  # pragma: no cover - upstream layout change
+        raise RuntimeError(
+            "scitex_cards is installed but "
+            "scitex_cards._django.services.ENV_LANE_GLOBS could not be "
+            "imported, so the hub cannot learn which env var disables "
+            "per-project lane discovery. Without it the board unions every "
+            "per-project lane on the host into every hub user's view. "
+            "Find the new location of that constant and update "
+            "cards_lane_globs_env() in config/settings/_optional_apps.py."
+        ) from exc
+    return ENV_LANE_GLOBS
+
+
 #: OPERATOR-FACING name for the cards store, in the hub's own
 #: ``SCITEX_HUB_<X>`` namespace (ADR-0001, ``config/_env.py``). Exactly the
 #: shape ``SCITEX_HUB_CROSSREF_DB_PATH`` -> ``CROSSREF_DB_PATH`` already has
@@ -335,7 +370,28 @@ def optional_upstream_apps() -> list[str]:
     cards_apps = _installed("scitex_cards._django.apps")
     if cards_apps is not None:
         entries.append(cards_appconfig_path(cards_apps))
-        os.environ["SCITEX_TODO_LANE_GLOBS"] = ""
+        # Opt the board out of host-side per-project lane discovery: the union
+        # would leak host lanes to every hub user.
+        #
+        # THE NAME IS IMPORTED, NOT WRITTEN. This line set
+        # "SCITEX_TODO_LANE_GLOBS" — the pre-rename name — for as long as the
+        # guard has existed, and scitex_cards has only ever read
+        # SCITEX_CARDS_LANE_GLOBS, so the opt-out did nothing. Nothing anywhere
+        # consumes the old name (checked across the installed tree), so the
+        # export was inert while looking deliberate, and the test that guarded
+        # it asserted the same wrong literal and passed.
+        #
+        # Unset and empty are OPPOSITE here, which is why the miss mattered:
+        # _discover_lanes() falls back to DEFAULT_LANE_GLOBS
+        # ("~/proj/*/.scitex/cards/tasks.yaml") when the variable is absent,
+        # and treats an explicitly-empty value as the documented opt-out.
+        #
+        # Latent rather than live today: both the prod and dev django
+        # containers run with HOME=/root, so the fallback glob
+        # /root/proj/*/.scitex/cards/tasks.yaml matched 0 files when measured
+        # 2026-09-07. It becomes real the moment HOME changes or a home
+        # carrying project lanes is mounted.
+        os.environ[cards_lane_globs_env()] = ""
         publish_cards_store_target()
 
     return entries
