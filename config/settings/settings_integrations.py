@@ -38,6 +38,38 @@ SCITEX_SCHOLAR_ENGINES = os.getenv(
 # Default search mode: "parallel" or "single"
 SCITEX_SCHOLAR_DEFAULT_MODE = os.getenv("SCITEX_SCHOLAR_DEFAULT_MODE", "parallel")
 
+# Crossref endpoint scitex-scholar's citation graph resolves.
+#
+# READ AS A DJANGO SETTING, NEVER AS AN ENVIRONMENT VARIABLE. Mounted inside a
+# host project, scholar's _api_url() does
+# getattr(settings, "SCITEX_SCHOLAR_CROSSREF_API_URL"), falls back to the
+# deprecated CROSSREF_API_URL alias, and returns None -> 503 before the builder
+# is constructed. Its own env-var fallback lives in scholar's STANDALONE
+# settings module, which never executes in our process.
+#
+# So exporting the variable is not enough, and that is exactly how this hid:
+# the value was set in the prod container and in both .env.example files, and
+# defined in no .py file, so /apps/scholar/v2/ answered 503 "not configured"
+# while every place a human would look showed it configured. This line is what
+# makes the environment reach the code.
+#
+# NO DEFAULT, ON PURPOSE. Unconfigured must stay None so scholar's explicit 503
+# still fires; a plausible-looking default would convert an honest "not
+# configured" into requests aimed at the wrong host — a worse failure, because it
+# fails while looking like it works.
+#
+# `or None` IS LOAD-BEARING, NOT STYLE — do not simplify it away. scholar's
+# _api_url() returns this setting when it `is not None`, and only falls through
+# to the deprecated bare CROSSREF_API_URL alias when it IS None. So an
+# accidentally-empty export behaves differently in the two spellings:
+#     ""   (without `or None`)  -> "" is not None -> returned -> 503, and the
+#                                  alias is NEVER consulted
+#     None (with `or None`)     -> falls through to the alias, as intended
+# Both end in a 503 today, so nothing is visibly broken without it; the hazard is
+# confined to the one-release window in which the alias still works. Confirmed
+# against the resolver by scitex-scholar 2026-09-07.
+SCITEX_SCHOLAR_CROSSREF_API_URL = os.getenv("SCITEX_SCHOLAR_CROSSREF_API_URL") or None
+
 # ---------------------------------------
 # SciTeX Scholar Library Settings
 # ---------------------------------------
