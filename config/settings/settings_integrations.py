@@ -55,8 +55,19 @@ SCITEX_SCHOLAR_DEFAULT_MODE = os.getenv("SCITEX_SCHOLAR_DEFAULT_MODE", "parallel
 #
 # NO DEFAULT, ON PURPOSE. Unconfigured must stay None so scholar's explicit 503
 # still fires; a plausible-looking default would convert an honest "not
-# configured" into requests aimed at the wrong host. `or None` normalises an
-# empty-string export to the same unconfigured state.
+# configured" into requests aimed at the wrong host — a worse failure, because it
+# fails while looking like it works.
+#
+# `or None` IS LOAD-BEARING, NOT STYLE — do not simplify it away. scholar's
+# _api_url() returns this setting when it `is not None`, and only falls through
+# to the deprecated bare CROSSREF_API_URL alias when it IS None. So an
+# accidentally-empty export behaves differently in the two spellings:
+#     ""   (without `or None`)  -> "" is not None -> returned -> 503, and the
+#                                  alias is NEVER consulted
+#     None (with `or None`)     -> falls through to the alias, as intended
+# Both end in a 503 today, so nothing is visibly broken without it; the hazard is
+# confined to the one-release window in which the alias still works. Confirmed
+# against the resolver by scitex-scholar 2026-09-07.
 SCITEX_SCHOLAR_CROSSREF_API_URL = os.getenv("SCITEX_SCHOLAR_CROSSREF_API_URL") or None
 
 # ---------------------------------------
