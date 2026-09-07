@@ -38,6 +38,27 @@ SCITEX_SCHOLAR_ENGINES = os.getenv(
 # Default search mode: "parallel" or "single"
 SCITEX_SCHOLAR_DEFAULT_MODE = os.getenv("SCITEX_SCHOLAR_DEFAULT_MODE", "parallel")
 
+# Crossref endpoint scitex-scholar's citation graph resolves.
+#
+# READ AS A DJANGO SETTING, NEVER AS AN ENVIRONMENT VARIABLE. Mounted inside a
+# host project, scholar's _api_url() does
+# getattr(settings, "SCITEX_SCHOLAR_CROSSREF_API_URL"), falls back to the
+# deprecated CROSSREF_API_URL alias, and returns None -> 503 before the builder
+# is constructed. Its own env-var fallback lives in scholar's STANDALONE
+# settings module, which never executes in our process.
+#
+# So exporting the variable is not enough, and that is exactly how this hid:
+# the value was set in the prod container and in both .env.example files, and
+# defined in no .py file, so /apps/scholar/v2/ answered 503 "not configured"
+# while every place a human would look showed it configured. This line is what
+# makes the environment reach the code.
+#
+# NO DEFAULT, ON PURPOSE. Unconfigured must stay None so scholar's explicit 503
+# still fires; a plausible-looking default would convert an honest "not
+# configured" into requests aimed at the wrong host. `or None` normalises an
+# empty-string export to the same unconfigured state.
+SCITEX_SCHOLAR_CROSSREF_API_URL = os.getenv("SCITEX_SCHOLAR_CROSSREF_API_URL") or None
+
 # ---------------------------------------
 # SciTeX Scholar Library Settings
 # ---------------------------------------
